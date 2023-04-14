@@ -1,0 +1,468 @@
+---
+title: "Let me predict your GPA"
+author: "Nursima Donuk"
+date: "12/14/2020"
+subtitle: "STAT 214 - Fall 2020 - Final Project"
+output:
+  pdf_document: default
+  html_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Loading the CSV File and Observing the Data
+
+```{r}
+library(readr)
+survey <- read_csv("studentsurvey.csv")
+head(survey)
+str(survey)
+```
+
+We can see that our data has many attributes, we will select a portion of these to build a model that will predict the students `GPA`. The first column we see is the `Year` the student is in, this is a qualitative variable. Then we see `Gender`, female or male. Another qualitative variable is `Award`, the students were asked what type of award would they prefer to win. The next qualitative variable indicates whether the student performed better in the math or verbal section of the SAT. The next two quantitative variables indicate the `Height` and `Weight` of the students in inches and pounds. Next quantitative variables are the number of siblings the student has, followed by the birth order of the student (first-born, second-born etc). Then we have the verbal SAT score, math SAT score, followed by the total SAT score of the student. Finally we have the `GPA` in a 4.0 scale and the number of body `Piercings` the student has.
+
+***At the end of this project I would like to test my model to see if it will predict my GPA accurately***
+
+## Handling Missing Data
+
+```{r}
+mean(is.na(survey))
+```
+
+We see that there is a very small portion of data missing.
+
+```{r}
+survey[!complete.cases(survey),]
+SSurvey <- na.omit(survey)
+mean(is.na(SSurvey))
+```
+
+We removed the missing data.
+
+## Plots
+
+Plotting the different relationships of the independent variables with the dependent variable will give us a sense of what our final model may look like. We will be more familiar with our data as the visualizations are often insightful. 
+
+```{r, figures-side, fig.show="hold", out.width="50%"}
+plot(SSurvey$SAT, SSurvey$GPA, main="SAT vs GPA", col = "darkblue", pch=19)
+plot(SSurvey$Piercings, SSurvey$GPA, main="Piercings vs GPA", col = "darkorange", pch=19)
+```
+
+```{r, figures-side2, fig.show="hold", out.width="50%"}
+plot(SSurvey$VerbalSAT, SSurvey$GPA, main="Verbal SAT vs GPA", col = "green", pch=19)
+plot(SSurvey$MathSAT, SSurvey$GPA, col = "deeppink", main = "Math SAT vs GPA", pch=19)
+```
+
+```{r, figures-side4, fig.show="hold", out.width="50%"}
+plot(SSurvey$Siblings, SSurvey$GPA, main="# Siblings vs GPA", col = "skyblue", pch=19)
+plot(SSurvey$BirthOrder, SSurvey$GPA, col = "darkmagenta", main = "Birth Order vs GPA", pch=19)
+```
+
+```{r, figures-side3, fig.show="hold", out.width="50%"}
+plot(as.factor(SSurvey$Gender), col = "coral2", main = "Student Gender Histogram")
+plot(as.factor(SSurvey$Year), col = "springgreen3", main = "Student Year Histogram")
+```
+
+```{r, figures-side6, fig.show="hold", out.width="50%"}
+plot(as.factor(SSurvey$Award), col = "deeppink", main = "Award Preferance Histogram")
+plot(as.factor(SSurvey$HigherSAT), col = "darkblue", main = "Student Higher SAT Histogram")
+```
+
+```{r}
+i <- 1
+femSat <- c()
+femGpa <- c()
+malSat <- c()
+malGpa <- c()
+while(i <= length(SSurvey$Year)) {
+  if(SSurvey$Gender[i] == 'F') {
+    femSat <- c(femSat, SSurvey$SAT[i])
+    femGpa <- c(femGpa, SSurvey$GPA[i])
+  }
+  else {
+    malSat <- c(malSat, SSurvey$SAT[i])
+    malGpa <- c(malGpa, SSurvey$GPA[i])
+  }
+  i <- i+1
+}
+```
+
+```{r, figures-side5, fig.show="hold", out.width="50%"}
+plot(femSat, femGpa, col = "coral2", main = "Female Students SAT Scores vs GPA", pch = 19)
+plot(malSat, malGpa, col = "springgreen3", main = "Male Students SAT Scores vs GPA", pch = 19)
+```
+
+
+## Building a Correlation Matrix
+
+Correlation matrix must contain only quantitative variables.
+
+```{r}
+QuanData <- data.frame(Height = SSurvey$Height,
+                       Weight = SSurvey$Weight,
+                       Siblings = SSurvey$Siblings,
+                       BirthOrder = SSurvey$BirthOrder,
+                       VerbalSAT = SSurvey$VerbalSAT,
+                       MathSAT = SSurvey$MathSAT,
+                       SAT = SSurvey$SAT,
+                       Piercings = SSurvey$Piercings)
+res <- cor(QuanData)
+round(res, 2)
+```
+
+We can observe that the `SAT` score has a high correlation between the `MathSAT` and `VerbalSAT`. Since the `SAT` variable is simply the sum of `MathSAT` and `VerbalSAT`, we can remove those from our model.
+
+## Variable Selection - Stepwise Regression
+
+Now we can perform a stepwise regression model to decide which independent variables will be the best predictors of the `GPA`.
+
+```{r, warning=FALSE, message=FALSE}
+# Install development version from GitHub
+# install.packages("devtools")
+# devtools::install_github("rsquaredacademy/olsrr")
+library(olsrr)
+library(tidyverse)
+```
+
+```{r}
+#The plot method shows the panel of fit criteria for best subset regression methods.
+model<- lm(GPA ~ Year + Gender + Award + HigherSAT + Height + Weight + Siblings + BirthOrder + SAT + Piercings, data = SSurvey)
+k <-ols_step_both_p(model, details = T)
+plot(k)
+```
+
+Our stepwise model picked 3 variables to be the best predictors of GPA:
+
+* `SAT`
+
+* `Gender`
+
+* `Award`
+
+## Time to Build Some Models
+
+**The Complete Second Order Model**
+
+```{r}
+model1 <- lm(GPA ~ SAT + I(SAT^2) + Gender + Award + Gender*Award + SAT*Gender + SAT*Award + SAT*Gender*Award + I(SAT^2)*Gender + I(SAT^2)*Award + I(SAT^2)*Gender*Award, data = SSurvey)
+summary(model1)
+```
+
+**Taking Out Quadratic Terms**
+
+```{r}
+model2 <- lm(GPA ~ SAT + Gender + Award + Gender*Award + SAT*Gender + SAT*Award + SAT*Gender*Award, data = SSurvey)
+summary(model2)
+```
+
+Performing ANOVA test to see if the quadratic terms are useful.
+
+```{r}
+anova(model1, model2)
+```
+
+The high p-value suggests that the quadratic terms do not make the complete second order model significantly better than the reduced one. Therefore we proceed with model 2.
+
+**Taking Out QLxQL Interactions**
+
+```{r}
+model3 <- lm(GPA ~ SAT + Gender + Award + SAT*Gender + SAT*Award, data = SSurvey)
+summary(model3)
+```
+
+Performing ANOVA test to see if the qualitative-qualitative interaction terms are useful.
+
+```{r}
+anova(model2, model3)
+```
+
+The large p-value suggests that the qualitative-qualitative interaction terms do not make the model significantly better. Therefore we choose the model with less terms, which is model 3.
+
+**Taking Out QNxQL Interactions**
+
+```{r}
+model4 <- lm(GPA ~ SAT + Gender + Award, data = SSurvey)
+summary(model4)
+```
+
+Performing ANOVA test to see if the quantitative-qualitative interaction terms are useful.
+
+```{r}
+anova(model3, model4)
+```
+
+The large p-value suggests that the quantitative-qualitative interaction terms do not make the model significantly better. Therefore we choose the model with less terms, which is model 4.
+
+## Second Attenmp to do Stepwise Regression
+
+```{r, warning=FALSE, message=FALSE}
+library(MASS)
+```
+
+
+```{r}
+# Fit the full model 
+full.model <- lm(GPA ~ Year + Gender + Award + Height + Weight + Siblings + SAT + Piercings, data = SSurvey)
+summary(full.model)
+
+# Stepwise regression model
+step.model <- stepAIC(full.model, direction = "both", 
+                      trace = T)
+summary(step.model)
+```
+
+
+```{r, warning=FALSE, message=FALSE}
+library(leaps)
+```
+
+```{r}
+models <- regsubsets(GPA ~ Year + Gender + Award + HigherSAT + Height + Weight + Siblings + BirthOrder + SAT + Piercings, data = SSurvey, nvmax = 5,
+                     method = "seqrep")
+summary(models)
+```
+
+Both of these stepwise regression models picked:
+
+* `SAT`
+
+* `Gender`
+
+* `Award`
+
+* `Weight`
+
+* `Piercings`
+
+**Complete Second Order**
+
+```{r}
+model6 <- lm(GPA ~ SAT + Piercings + Weight + SAT*Piercings + SAT*Weight + Piercings*Weight + SAT*Piercings*Weight + I(SAT^2) + I(Piercings^2) + I(Weight^2) + Gender + Award + Gender*Award + Gender*SAT + Gender*Piercings + Gender*Weight + Gender*SAT*Piercings + Gender*SAT*Weight + Gender*Piercings*Weight + Gender*SAT*Piercings*Weight + Gender*I(SAT^2) + Gender*I(Piercings^2) + Gender*I(Weight^2) + Award*SAT + Award*Piercings + Award*Weight + Award*SAT*Piercings + Award*SAT*Weight + Award*Piercings*Weight + Award*SAT*Piercings*Weight + Award*I(SAT^2) + Award*I(Piercings^2) + Award*I(Weight^2), data = SSurvey)
+summary(model6)
+```
+
+**Remove Quadratic Terms**
+
+```{r}
+model7 <- lm(GPA ~ SAT + Piercings + Weight + SAT*Piercings + SAT*Weight + Piercings*Weight + SAT*Piercings*Weight + Gender + Award + Gender*Award + Gender*SAT + Gender*Piercings + Gender*Weight + Gender*SAT*Piercings + Gender*SAT*Weight + Gender*Piercings*Weight + Gender*SAT*Piercings*Weight + Award*SAT + Award*Piercings + Award*Weight + Award*SAT*Piercings + Award*SAT*Weight + Award*Piercings*Weight + Award*SAT*Piercings*Weight, data = SSurvey)
+summary(model7)
+```
+
+Performing ANOVA test to see if the quadratic terms are useful.
+
+```{r}
+anova(model6, model7)
+```
+
+The high p-value suggests that the quadratic terms do not make the complete second order model significantly better than the reduced one. Therefore we proceed with model 7.
+
+**Remove QNxQL Interactions**
+
+```{r}
+model8 <- lm(GPA ~ SAT + Piercings + Weight + SAT*Piercings + SAT*Weight + Piercings*Weight + SAT*Piercings*Weight + Gender + Award + Gender*Award, data = SSurvey)
+summary(model8)
+```
+
+Performing ANOVA test to see if the quantitative-qualitative interaction terms are useful.
+
+```{r}
+anova(model7, model8)
+```
+
+The high p-value suggests that the quantitative-qualitative interaction terms do not make the first model significantly better than the reduced one. Therefore we proceed with model 8.
+
+**Remove QLxQL Interactions**
+
+```{r}
+model9 <- lm(GPA ~ SAT + Piercings + Weight + SAT*Piercings + SAT*Weight + Piercings*Weight + SAT*Piercings*Weight + Gender + Award, data = SSurvey)
+summary(model9)
+```
+
+Performing ANOVA test to see if the qualitative-qualitative interaction terms are useful.
+
+```{r}
+anova(model8, model9)
+```
+
+The high p-value suggests that the qualitative-qualitative interaction terms do not make the first model significantly better than the reduced one. Therefore we proceed with model 9.
+
+**Removing QNxQN Interactions**
+
+```{r}
+model10 <- lm(GPA ~ SAT + Piercings + Weight + Gender + Award, data = SSurvey)
+summary(model10)
+```
+
+Performing ANOVA test to see if the quantitative-quantitative interaction terms are useful.
+
+```{r}
+anova(model9, model10)
+```
+
+The high p-value suggests that the quantitative-quantitative interaction terms do not make the first model significantly better than the reduced one. Therefore we proceed with model 10.
+
+We can observe that model 4 is a reduced version of model10. We will perform a final ANOVA test to see if the `Piercings` and `Weight` variables are significant.
+
+```{r}
+anova(model10, model4)
+```
+
+We see that the p-value is > .1, so we choose our final model to be model 4.
+
+Even though model 10 had a slightly higher adjusted R-squared, the ANOVA test chooses the reduced model to be better.
+
+## Our Final Model
+
+Let us take a look at model 4 again.
+
+```{r}
+summary(model4)
+```
+
+Even tough we have a low adjusted R-squared, we have a low p-value. 
+
+We see that we have our intercept, $\beta_0$ of 1.8919555
+
+Coefficient for `SAT` is 0.0011140
+
+`Gender` is a qualitative variable, therefore we define it as:
+
+$$\text{G}_{Male} = \left\{
+        \begin{array}{ll}
+            1 & \quad \text{if Male} \\
+            0 & \quad \text{if Female}
+        \end{array}
+    \right.$$
+
+And it has a coefficient of -0.1465098
+
+Then we have Award which is defined as:
+
+$$\text{A}_{Nobel} = \left\{
+        \begin{array}{ll}
+            1 & \quad \text{if Nobel} \\
+            0 & \quad \text{if otherwise}
+        \end{array}
+    \right.$$
+
+
+$$\text{A}_{Olympic} = \left\{
+        \begin{array}{ll}
+            1 & \quad \text{if Olympic} \\
+            0 & \quad \text{if otherwise}
+        \end{array}
+    \right.$$
+    
+    
+$\text{A}_{Nobel}$ has a coefficient of 0.0781172 and $\text{A}_{Olympic}$ has a coefficient of -0.0645140
+
+We end if with our prediction equation:
+
+$$\hat{y} = 1.8919555 + 0.001114(\text{SAT}) - 0.1465098(\text{G}_{Male}) + 0.0781172(\text{A}_{Nobel}) -0.064514(\text{A}_{Olympic})$$
+
+
+## Predicting My GPA
+
+I had a score of 1320 on my SAT. I am a Female, and I would prefer to win an Academy award.
+
+```{r, warning=FALSE, message=FALSE}
+newdat <- data.frame(SAT = 1320,
+                      Gender = 'F',
+                      Award = 'Academy')
+predict(model4, newdata = newdat, interval = 'confidence', level = .95)
+```
+
+The model is 95% confident that my GPA is between 3.221756 and 3.503029. Even though this seems accurate, my GPA is above this range. This may be due to the data being collected from a certain school district or another reason. 
+
+```{r}
+predict(model4, newdata = newdat, interval = 'prediction', level = .9)
+```
+
+Even though this prediction interval may have a far lower and upper bound, my GPA does fall in this range.
+
+**Predicting My Friends GPA**
+
+My friend got a score of 1330 on the SAT. Is a male and stated that he would rather receive a nobel award.
+
+```{r, warning=FALSE, message=FALSE}
+# Used for prediction
+newdat <- data.frame(SAT = 1330,
+                      Gender = 'M',
+                      Award = 'Nobel')
+predict(model4, newdata = newdat, interval = 'confidence', level = .95)
+```
+
+The model is 95% confident that my friend's GPA is between 3.226185 and 3.384094. Even though this seems accurate, my friend's GPA is above this range. This may be due to a similar reason my GPA fell above the range the model predicted.
+
+```{r}
+predict(model4, newdata = newdat, interval = 'prediction', level = .9)
+```
+
+Even though this prediction interval may have a far lower and upper bound, my friend's GPA does fall in this range.
+
+## Residual Analysis
+
+**Color Coded Residual Plot**
+
+The plot shows graphically the size of the residual value using a color code  (orange is longer line to blue - smaller line) and size of point. The size of residual is the length of the vertical line from the point to where it meets the regression line. We can observe that, the further the point is from the line, the larger and more orange it gets.
+
+```{r, warning=FALSE, message=FALSE}
+d <- SSurvey
+d$predicted <- predict(model4)   # Save the predicted values
+d$residuals <- residuals(model4) # Save the residual values
+ggplot(d, aes(x = SAT, y = GPA)) +
+  geom_smooth(method = "lm", se = FALSE, color = "grey") +     # regression line  
+  geom_segment(aes(xend = SAT, yend = predicted), alpha = .2) +      # draw line from point to line
+  geom_point(aes(color = abs(residuals), size = abs(residuals))) +  # size of the points
+  scale_color_continuous(low = "blue", high = "darkorange") +     # color of the points mapped to residual size - blue smaller, orange larger
+  guides(color = FALSE, size = FALSE) +                             # Size legend removed
+  geom_point(aes(y = predicted), shape = 1) +
+  theme_bw()
+```
+
+
+**Residuals vs Fitted Plot**
+
+Residual plots are used to look for underlying patterns in the residuals that may mean that the model has a problem.
+
+```{r}
+plot(model4, which=1, col=c("purple"))
+```
+
+We see that there is slightly more clutter around the middle. The points seem to be equally distributed above and below the line.
+
+**Normal Q–Q (quantile-quantile) Plot**
+
+One of our assumptions is that the residuals are normally distributed. To check this assumption, we construct the Q-Q plot below.
+
+```{r}
+plot(model4, which=2, col=c("red"))
+```
+
+Our plot has a nearly linear trend. This is a good indication that our residuals are nearly normally distributed.
+
+**Scale-Location**
+
+This plot test the linear regression assumption of equal variance (homoscedasticity) i.e. that the residuals have equal variance along the regression line. It is also called the Spread-Location plot.
+
+```{r}
+plot(model4, which=3, col=c("blue"))
+```
+
+**Residuals vs Leverage**
+
+This plot can be used to find influential cases in the dataset. An influential case is one that, if removed, will affect the model so its inclusion or exclusion should be considered. An influential case may or may not be an outlier and the purpose of this chart is to identify cases that have high influence in the model. Outliers will tend to exert leverage and therefore influence on the model.
+
+```{r}
+plot(model4, which=5, col=c("deeppink"))
+```
+
+We can see that most of the leverages are low, which is a good indication. Low leverage means that we do not have influential cases.
+
+## Conclusion
+
+Our model does not seem to have significant departures from the assumptions. This means that we can use our model. A drawback is the low R-squared, that says only about 19% of the variation in GPA can be explain by our model. The low p value from the global F-test suggests that out model is statistically useful for predicting GPA. As I tested it to predict my GPA, as well as my friend's GPA, the model seems to be fairly accurate. Another source of concern rises from the fact the the model is not curvilinear, maximum GPA is 4.0. Since we have a straight line model, the line will eventually exceed 4 based on the parameters.
+
+***The End***
